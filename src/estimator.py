@@ -1,74 +1,63 @@
 def estimator(data):
-    numberOfDays = data["timeToElapse"]
-    durationType = data["periodType"]
-    reportedCases = data["reportedCases"]
-    hospitalBeds = data["totalHospitalBeds"]
-    income = data["region"]["avgDailyIncomeInUSD"]
-    percentage = data["region"]["avgDailyIncomePopulation"]
+    impact = {}
+    severe_impact = {}
+    region = data.get('region')
+    period_type = data.get('periodType')
+    time_to_elapse = data.get("timeToElapse")
+    reported_cases = float(data.get("reportedCases"))
+    population = data.get("population")
+    total_hospital_beds = float(data.get('totalHospitalBeds'))
 
-    def daysConverter(number, durationType):
-        if data["periodType"] == 'days':
-            days = data["timeToElapse"]
-        elif data["periodType"] == 'weeks':
-            days = ((data["timeToElapse"]) * 7)
-        else:
-            days = ((data["timeToElapse"]) * 30)
+    # challenge 1
+    currently_infected = reported_cases * 10
+    severe_currently_infected = reported_cases * 50
+    impact["currentlyInfected"] = float(currently_infected)
+    severe_impact["currentlyInfected"] = float(severe_currently_infected)
 
-        return days
+    multiplier = _compute_multiplier(period_type, time_to_elapse)
+    impact["infectionsByRequestedTime"] = float(currently_infected * multiplier)
+    severe_impact["infectionsByRequestedTime"] = float(severe_currently_infected * multiplier)
 
-    def impactAssess(reportedCases, numberOfDays, hospitalBeds):
-        hospitalBeds = hospitalBeds * .35
-        impact = reportedCases * 10
-        severeImpact = reportedCases * 50
-        
-        impactTime = impact * ( 2 ** (numberOfDays//3))
-        impactTimeSevere = severeImpact * ( 2 ** (numberOfDays//3))
+    # Challenge 2
+    impact["severeCasesByRequestedTime"] = impact["infectionsByRequestedTime"] * 0.15
+    severe_impact["severeCasesByRequestedTime"] = severe_impact["infectionsByRequestedTime"] * 0.15
 
-        severeCasesByRequestedTime = int(impactTime *15/100)
-        severeSevereCasesByRequestedTime = int(impactTimeSevere *15/100)
+    available_hospital_beds = total_hospital_beds * 0.35
+    impact["hospitalBedsByRequestedTime"] = available_hospital_beds - impact["severeCasesByRequestedTime"]
+    severe_impact["hospitalBedsByRequestedTime"] = available_hospital_beds - severe_impact["severeCasesByRequestedTime"]
 
-        hospitalBedsLeft = ( data["totalHospitalBeds"] * .35 ) - severeCasesByRequestedTime
-        severeHospitalBedsLeft = ( data["totalHospitalBeds"] * .35 ) - severeSevereCasesByRequestedTime
-        hospitalBedsLeft = int(hospitalBedsLeft)
-        severeHospitalBedsLeft = int(severeHospitalBedsLeft)
+    # Challenge 3
+    impact["casesForICUByRequestedTime"] = impact["infectionsByRequestedTime"] * 0.05
+    severe_impact["casesForICUByRequestedTime"] = severe_impact["infectionsByRequestedTime"] * 0.05
 
-        icuCases = int(( .05 * impactTime))
-        severeIcuCases = int((.05 * impactTimeSevere))
-        ventilatorCases = int(( .02 * impactTime))
-        severeVentilatorCases = int((.02 * impactTimeSevere))
-        dollarsInFlight = int((impactTime * income * percentage) / numberOfDays)
-        severeDollarsInFlight = int((impactTimeSevere * income * percentage) / numberOfDays)
+    impact["casesForVentilatorsByRequestedTime"] = impact["infectionsByRequestedTime"] * 0.02
+    severe_impact["casesForVentilatorsByRequestedTime"] = severe_impact["infectionsByRequestedTime"] * 0.02
 
-        return impact, severeImpact, impactTime, impactTimeSevere, severeCasesByRequestedTime, severeSevereCasesByRequestedTime, hospitalBedsLeft, severeHospitalBedsLeft, icuCases, severeIcuCases, ventilatorCases, severeVentilatorCases, dollarsInFlight, severeDollarsInFlight
+    duration = _compute_duration_in_days(period_type, time_to_elapse)
+    impact["dollarsInFlight"] = (impact["infectionsByRequestedTime"] * region.get("avgDailyIncomePopulation") * region.get("avgDailyIncomeInUSD")) / duration
+    severe_impact["dollarsInFlight"] = (severe_impact["infectionsByRequestedTime"] * region.get("avgDailyIncomePopulation") * region.get("avgDailyIncomeInUSD")) / duration
+    for key, value in severe_impact.items():
+        if type(value) == float:
+            severe_impact[key] = int("%.0d" % severe_impact[key])
 
-    numberOfDays = daysConverter(numberOfDays, durationType)
-    currentlyInfected, severeCurrentlyInfected, requestedTime, requestedTimeSevere, severeCasesByRequestedTime, severeSevereCasesByRequestedTime, hospitalBedsLeft, severeHospitalBedsLeft, icuCases, severeIcuCases, ventilatorCases, severeVentilatorCases, dollarsInFlight, severeDollarsInFlight = impactAssess(reportedCases, numberOfDays, hospitalBeds)
+    for key, value in impact.items():
+        if type(value) == float:
+            impact[key] = int("%.0d" % impact[key])
+    return {"data": data, "impact": impact, "severeImpact": severe_impact}
 
-    data = {}
-    dataAndela = data
 
-    impact = {
-        "currentlyInfected": currentlyInfected,
-        "infectionsByRequestedTime": requestedTime,
-        "severeCasesByRequestedTime": severeCasesByRequestedTime,
-        "hospitalBedsByRequestedTime": hospitalBedsLeft,
-        "casesForICUByRequestedTime": icuCases,
-        "casesForVentilatorsByRequestedTime": ventilatorCases, 
-        "dollarsInFlight": dollarsInFlight
-    }
+def _compute_multiplier(period_type, time_to_elapse):
+    duration = _compute_duration_in_days(period_type, time_to_elapse)
+    factor = float("%.0d" % (duration / 3))
+    return 2 ** factor
 
-    severeImpact = {
-        "currentlyInfected": severeCurrentlyInfected,
-        "infectionsByRequestedTime": requestedTimeSevere,
-        "severeCasesByRequestedTime": severeSevereCasesByRequestedTime,
-        "hospitalBedsByRequestedTime": severeHospitalBedsLeft,
-        "casesForICUByRequestedTime": severeIcuCases,
-        "casesForVentilatorsByRequestedTime": severeVentilatorCases,
-        "dollarsInFlight": severeDollarsInFlight
-    }
 
-    data["data"] = dataAndela
-    data["impact"] = impact
-    data["severeImpact"] = severeImpact
-
-    return data
+def _compute_duration_in_days(period_type, time_to_elapse):
+    duration = 0
+    if period_type == "days":
+        duration = time_to_elapse
+    elif period_type == "weeks":
+        duration = time_to_elapse * 7
+    elif period_type == "months":
+        duration = time_to_elapse * 30
+    return float("%.0d" % duration)
