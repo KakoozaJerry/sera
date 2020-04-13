@@ -82,3 +82,5 @@ def extract_logs():
 
 if __name__ == "__main__":
     app.run()
+
+#the logs failed to work
